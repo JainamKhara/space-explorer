@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import ErrorBoundary from "./ErrorBoundary";
 import Planets from "./Planets";
 
-export default function SafePlanets(props: Parameters<typeof Planets>[0]) {
+export default function SafePlanets() {
   useEffect(() => {
     console.log("🌍 SafePlanets mounted");
     return () => console.log("🌍 SafePlanets unmounted");
@@ -12,7 +12,7 @@ export default function SafePlanets(props: Parameters<typeof Planets>[0]) {
 
   return (
     <ErrorBoundary>
-      <Planets {...props} />
+      <Planets />
     </ErrorBoundary>
   );
 }
