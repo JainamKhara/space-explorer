@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useSpaceStore } from "@/store/useSpaceStore";
+import { useSpaceStore, ScaleMode } from "@/store/useSpaceStore";
+import { PLANETS, SUN_CONFIG, PlanetConfig } from "@/lib/celestialData";
 
 // Toggle component
 function Toggle({
@@ -25,91 +26,6 @@ function Toggle({
   );
 }
 
-// Icon components
-function GravityIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <circle
-        cx="12"
-        cy="12"
-        r="4"
-        fill={active ? "#00d4ff" : "#ffffff60"}
-        className="transition-colors duration-300"
-      />
-      <path
-        d="M12 2v4M12 18v4M2 12h4M18 12h4"
-        stroke={active ? "#00d4ff" : "#ffffff40"}
-        strokeWidth="2"
-        strokeLinecap="round"
-        className="transition-colors duration-300"
-      />
-      <path
-        d="M5.64 5.64l2.83 2.83M15.54 15.54l2.83 2.83M5.64 18.36l2.83-2.83M15.54 8.46l2.83-2.83"
-        stroke={active ? "#00d4ff" : "#ffffff30"}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        className="transition-colors duration-300"
-      />
-    </svg>
-  );
-}
-
-function SoundIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M11 5L6 9H2v6h4l5 4V5z"
-        fill={active ? "#00d4ff" : "#ffffff40"}
-        className="transition-colors duration-300"
-      />
-      {active ? (
-        <>
-          <path
-            d="M15.54 8.46a5 5 0 010 7.07"
-            stroke="#00d4ff"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M19.07 4.93a10 10 0 010 14.14"
-            stroke="#00d4ff"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-        </>
-      ) : (
-        <path
-          d="M23 9l-6 6M17 9l6 6"
-          stroke="#ffffff40"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      )}
-    </svg>
-  );
-}
-
-function ResetIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M1 4v6h6"
-        stroke="#ffffff80"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M3.51 15a9 9 0 102.13-9.36L1 10"
-        stroke="#ffffff80"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export default function ControlPanel() {
   const {
     gravityEnabled,
@@ -120,43 +36,74 @@ export default function ControlPanel() {
     toggleAsteroids,
     showOrbits,
     toggleOrbits,
+    scaleMode,
+    setScaleMode,
     controlPanelOpen,
     toggleControlPanel,
     triggerResetView,
     gravityTransitioning,
+    simDate,
+    simSpeed,
+    setSimSpeed,
+    isPlaying,
+    togglePlay,
+    resetToCurrentDate,
+    setSelectedObject,
   } = useSpaceStore();
+
+  const handleSelectBody = (config: PlanetConfig) => {
+    setSelectedObject({
+      id: config.id,
+      name: config.name,
+      type: config.type,
+      tagline: config.tagline,
+      description: config.description,
+      distance: config.id === "sun" ? "0 AU" : `${config.stats.distanceAU} AU`,
+      color: config.color,
+      emissive: config.emissive,
+      atmosphereColor: config.atmosphereColor,
+      stats: config.stats,
+      atmosphereGases: config.atmosphereGases,
+      missions: config.missions,
+      trivia: config.trivia,
+      moons: config.moons,
+      config: config,
+    });
+  };
 
   return (
     <div className="fixed top-4 right-4 z-40 flex flex-col items-end gap-2">
-      {/* Toggle button */}
+      {/* Expand/Collapse Header Button */}
       <motion.button
         onClick={toggleControlPanel}
-        className="glass glass-hover w-10 h-10 flex items-center justify-center rounded-xl"
+        className="glass glass-hover w-10 h-10 flex items-center justify-center rounded-xl border border-white/10 shadow-lg"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        title={controlPanelOpen ? "Collapse" : "Expand controls"}
+        title={controlPanelOpen ? "Collapse Mission Control" : "Expand Mission Control"}
       >
         <svg
-          width="16"
-          height="16"
+          width="18"
+          height="18"
           viewBox="0 0 24 24"
           fill="none"
-          style={{
-            transform: controlPanelOpen ? "rotate(180deg)" : "none",
-            transition: "transform 0.3s ease",
-          }}
+          stroke="#00d4ff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          <path
-            d="M12 5v14M5 12l7 7 7-7"
-            stroke="#00d4ff"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <line x1="4" y1="21" x2="4" y2="14" />
+          <line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" />
+          <line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" />
+          <line x1="9" y1="8" x2="15" y2="8" />
+          <line x1="17" y1="16" x2="23" y2="16" />
         </svg>
       </motion.button>
 
-      {/* Main panel */}
+      {/* Main Panel */}
       <AnimatePresence>
         {controlPanelOpen && (
           <motion.div
@@ -164,41 +111,146 @@ export default function ControlPanel() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 20, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-            className="glass w-72 p-4 flex flex-col gap-4 max-h-[90vh] overflow-y-auto custom-scrollbar"
+            className="glass w-80 p-4 flex flex-col gap-4 max-h-[85vh] overflow-y-auto custom-scrollbar border border-cyan-500/20 shadow-2xl rounded-2xl backdrop-blur-xl"
             style={{ fontFamily: "var(--font-mono)" }}
           >
-            {/* Header */}
-            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
-              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span
-                className="text-xs font-bold tracking-widest text-white/60 uppercase"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                Mission Control
-              </span>
+            {/* Mission Control Title */}
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span
+                  className="text-xs font-bold tracking-widest text-white/80 uppercase"
+                  style={{ fontFamily: "var(--font-heading)" }}
+                >
+                  Mission Control
+                </span>
+              </div>
             </div>
 
-            {/* Gravity Toggle */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <GravityIcon active={gravityEnabled} />
-                <div>
-                  <div className="text-xs text-white/80 font-medium">
-                    Gravity
-                  </div>
-                  <div
-                    className="text-xs"
-                    style={{
-                      color: gravityEnabled ? "#00d4ff" : "#ff8b6b",
-                      fontSize: "0.65rem",
-                    }}
+            {/* QUICK CELESTIAL NAV BAR */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[0.55rem] text-white/40 uppercase tracking-widest font-bold">
+                Target Celestial Body
+              </span>
+              <div className="grid grid-cols-5 gap-1 bg-black/30 p-1 rounded-xl border border-white/5">
+                <button
+                  onClick={() => handleSelectBody(SUN_CONFIG)}
+                  className="px-1.5 py-1 text-[0.65rem] font-bold rounded text-amber-300 hover:bg-amber-500/20 transition-all border border-amber-500/30"
+                  title="The Sun"
+                >
+                  SUN
+                </button>
+                {PLANETS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelectBody(p)}
+                    className="px-1.5 py-1 text-[0.65rem] font-medium rounded text-white/70 hover:text-cyan-300 hover:bg-white/10 transition-all text-center"
+                    title={p.name}
                   >
-                    {gravityTransitioning
-                      ? "TRANSITIONING..."
-                      : gravityEnabled
-                      ? "ORBITAL MODE"
-                      : "ZERO-G MODE"}
-                  </div>
+                    {p.name.slice(0, 3).toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-white/10" />
+
+            {/* PLANET SCALE SELECTOR */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[0.55rem] text-white/40 uppercase tracking-widest font-bold">
+                  Planet Size Scale Mode
+                </span>
+                <span className="text-[0.65rem] text-cyan-400 font-bold uppercase">{scaleMode}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+                {(
+                  [
+                    { id: "calibrated", label: "Calibrated" },
+                    { id: "true", label: "True Ratio" },
+                    { id: "logarithmic", label: "Log Scale" },
+                  ] as const
+                ).map((mode) => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setScaleMode(mode.id as ScaleMode)}
+                    className={`py-1 text-[0.65rem] font-bold rounded-lg transition-all ${
+                      scaleMode === mode.id
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                        : "text-white/40 hover:text-white"
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-white/10" />
+
+            {/* REAL-TIME EPHEMERIS TIME CONTROLS */}
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[0.55rem] text-white/40 uppercase tracking-widest font-bold">
+                  Ephemeris Time Flow
+                </span>
+                <span className="text-[0.65rem] text-cyan-400 font-bold">
+                  {isPlaying ? `${simSpeed}x Speed` : "PAUSED"}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={togglePlay}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    isPlaying
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                      : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                  }`}
+                >
+                  {isPlaying ? "⏸ PAUSE" : "▶ PLAY"}
+                </button>
+
+                <div className="grid grid-cols-4 gap-1 grow">
+                  {[1, 10, 50, 200].map((spd) => (
+                    <button
+                      key={spd}
+                      onClick={() => setSimSpeed(spd)}
+                      className={`py-1 text-[0.6rem] font-bold rounded-lg border transition-all ${
+                        simSpeed === spd && isPlaying
+                          ? "bg-cyan-500/30 text-cyan-300 border-cyan-400"
+                          : "bg-white/5 text-white/40 border-white/5 hover:text-white"
+                      }`}
+                    >
+                      {spd}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={resetToCurrentDate}
+                className="w-full py-1 text-[0.65rem] text-white/60 hover:text-cyan-300 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-all text-center"
+              >
+                ↻ Sync to Current Real Date
+              </button>
+            </div>
+
+            <div className="border-t border-white/10" />
+
+            {/* GRAVITY TOGGLE */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-white/80 font-medium">Orbital Physics</div>
+                <div
+                  className="text-[0.6rem]"
+                  style={{ color: gravityEnabled ? "#00d4ff" : "#ff8b6b" }}
+                >
+                  {gravityTransitioning
+                    ? "TRANSITIONING..."
+                    : gravityEnabled
+                    ? "KEPLERIAN GRAVITY"
+                    : "ZERO-G DRIFT"}
                 </div>
               </div>
               <Toggle
@@ -208,16 +260,9 @@ export default function ControlPanel() {
               />
             </div>
 
-            <div className="border-t border-white/10 my-1" />
-
-            {/* Asteroid Belt Toggle */}
+            {/* ASTEROID BELT TOGGLE */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2L2 12l10 10 10-10L12 2z" stroke={showAsteroids ? "#ffb347" : "#ffffff40"} strokeWidth="1.5" />
-                </svg>
-                <div className="text-xs text-white/80 font-medium">Asteroid Belt</div>
-              </div>
+              <div className="text-xs text-white/80 font-medium">Asteroid Belt</div>
               <Toggle
                 value={showAsteroids}
                 onToggle={toggleAsteroids}
@@ -225,46 +270,19 @@ export default function ControlPanel() {
               />
             </div>
 
-            {/* Orbit lines toggle */}
+            {/* ORBIT LINES TOGGLE */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="9"
-                    stroke={showOrbits ? "#334466cc" : "#ffffff20"}
-                    strokeWidth="1"
-                    strokeDasharray="4 2"
-                  />
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="2"
-                    fill={showOrbits ? "#ffb347" : "#ffffff30"}
-                  />
-                </svg>
-                <div className="text-xs text-white/80 font-medium">
-                  Orbit Lines
-                </div>
-              </div>
+              <div className="text-xs text-white/80 font-medium">Keplerian Orbits</div>
               <Toggle
                 value={showOrbits}
                 onToggle={toggleOrbits}
-                colorOn="#ffb347"
+                colorOn="#00d4ff"
               />
             </div>
 
-            <div className="border-t border-white/10 my-1" />
-
-            {/* Sound Toggle */}
+            {/* SOUND TOGGLE */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <SoundIcon active={soundEnabled} />
-                <div className="text-xs text-white/80 font-medium">
-                  Ambient Sound
-                </div>
-              </div>
+              <div className="text-xs text-white/80 font-medium">Ambient Audio</div>
               <Toggle
                 value={soundEnabled}
                 onToggle={toggleSound}
@@ -274,21 +292,15 @@ export default function ControlPanel() {
 
             <div className="border-t border-white/10" />
 
-            {/* Reset View */}
+            {/* RESET CAMERA VIEW */}
             <motion.button
               onClick={triggerResetView}
-              className="flex items-center justify-center gap-2 py-2 rounded-lg border border-white/10 text-xs text-white/60 hover:text-white/90 hover:border-white/30 transition-all duration-300"
+              className="flex items-center justify-center gap-2 py-2 rounded-xl border border-white/10 text-xs text-white/70 hover:text-white hover:border-white/30 transition-all duration-300 bg-white/5"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              <ResetIcon />
-              Reset View
+              Reset Camera View
             </motion.button>
-
-            {/* Footer */}
-            <div className="text-center text-white/20 pt-1" style={{ fontSize: "0.6rem", letterSpacing: "0.1em" }}>
-              DEEP SPACE EXPLORER v2.0
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

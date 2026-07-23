@@ -43,7 +43,7 @@ export default function SolarFlares() {
   return (
     <group ref={groupRef}>
       {flares.map((flare) => (
-        <mesh key={flare.id} rotation={flare.rotation}>
+        <mesh key={flare.id} rotation={flare.rotation} raycast={() => null}>
           <torusGeometry args={[3.6, 0.05, 16, 100, Math.PI / 2]} />
           <meshBasicMaterial
             color="#ff4400"

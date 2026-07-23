@@ -2,28 +2,130 @@
 
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
 import * as THREE from "three";
-import { PLANETS, PlanetConfig } from "@/lib/celestialData";
+import {
+  PLANETS,
+  SUN_CONFIG,
+  PlanetConfig,
+  getKeplerianPosition,
+} from "@/lib/celestialData";
 import {
   atmosphereVertexShader,
   atmosphereFragmentShader,
 } from "@/lib/shaders";
-import { useSpaceStore } from "@/store/useSpaceStore";
+import { useSpaceStore, ScaleMode, SelectedObject } from "@/store/useSpaceStore";
 import { useGravityEngine } from "@/hooks/useGravityEngine";
 import SolarFlares from "./SolarFlares";
 
-// Individual ring system
-function PlanetRings({
-  innerR,
-  outerR,
-  color,
-  opacity,
+// Scale multiplier for planet radius
+function getDisplayRadius(config: PlanetConfig, scaleMode: ScaleMode): number {
+  if (scaleMode === "true") {
+    return Math.max(0.12, config.radiusTrueRatio * 0.42);
+  }
+  if (scaleMode === "logarithmic") {
+    return config.radiusLogarithmic;
+  }
+  return config.radius; // Calibrated default
+}
+
+function getSunDisplayRadius(scaleMode: ScaleMode): number {
+  if (scaleMode === "true") return 10.0;
+  if (scaleMode === "logarithmic") return 6.0;
+  return SUN_CONFIG.radius; // 3.8
+}
+
+// Dynamic orbit radius calculation
+function getOrbitRadius(config: PlanetConfig, scaleMode: ScaleMode): number {
+  if (scaleMode === "true") {
+    const sunRadius = 10.0;
+    const baseMargin = sunRadius + 8.0;
+    return baseMargin + (config.orbitRadius - 8) * 1.45;
+  }
+  if (scaleMode === "logarithmic") {
+    const sunRadius = 6.0;
+    return sunRadius + 7.0 + (config.orbitRadius - 8) * 1.2;
+  }
+  return config.orbitRadius;
+}
+
+// Subtle Glowing Selection Highlight & Clean Floating Name Tag
+function SelectionHighlight({
+  radius,
+  name,
 }: {
-  innerR: number;
-  outerR: number;
-  color: string;
-  opacity: number;
+  radius: number;
+  name: string;
 }) {
+  const ringRef = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ringRef.current) {
+      ringRef.current.rotation.z = t * 0.4;
+      const pulse = 1 + Math.sin(t * 2) * 0.04;
+      ringRef.current.scale.setScalar(pulse);
+    }
+  });
+
+  return (
+    <group raycast={() => null}>
+      {/* Subtle Soft Glowing Ring around Planet */}
+      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]} raycast={() => null}>
+        <ringGeometry args={[radius * 1.25, radius * 1.34, 64]} />
+        <meshBasicMaterial
+          color={new THREE.Color("#00d4ff")}
+          transparent
+          opacity={0.6}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* Sleek Floating Planet Name Tag */}
+      <Html position={[0, radius + 1.2, 0]} center distanceFactor={18}>
+        <div className="flex flex-col items-center pointer-events-none select-none">
+          <div className="flex items-center gap-1.5 bg-black/80 text-cyan-300 text-xs font-bold px-3 py-1 rounded-full border border-cyan-400/50 shadow-[0_0_15px_rgba(0,212,255,0.4)] backdrop-blur-md uppercase tracking-wider whitespace-nowrap font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            {name}
+          </div>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+// Individual ring system
+// Realistic per-planet ring system (Saturn has wide brilliant rings, others have faint/thin rings)
+function PlanetRingSystem({
+  planetId,
+  radius,
+  ringColor,
+}: {
+  planetId: string;
+  radius: number;
+  ringColor?: string;
+}) {
+  let innerR = radius * 1.35;
+  let outerR = radius * 2.6;
+  let opacity = 0.8;
+  let color = ringColor || "#d4a060";
+
+  if (planetId === "jupiter") {
+    innerR = radius * 1.12;
+    outerR = radius * 1.22;
+    opacity = 0.06; // Extremely faint, thin dust ring
+  } else if (planetId === "uranus") {
+    innerR = radius * 1.2;
+    outerR = radius * 1.38;
+    opacity = 0.16; // Narrow cyan ring
+  } else if (planetId === "neptune") {
+    innerR = radius * 1.15;
+    outerR = radius * 1.28;
+    opacity = 0.1; // Faint azure ring
+  }
+
   const material = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -38,13 +140,13 @@ function PlanetRings({
   );
 
   return (
-    <mesh rotation={[Math.PI / 2.2, 0, 0]} material={material}>
+    <mesh rotation={[Math.PI / 2.2, 0, 0]} material={material} raycast={() => null}>
       <ringGeometry args={[innerR, outerR, 128]} />
     </mesh>
   );
 }
 
-// Atmosphere glow shell
+// Atmosphere glow shell (raycast disabled)
 function Atmosphere({
   radius,
   color,
@@ -72,6 +174,7 @@ function Atmosphere({
     });
     const geo = new THREE.SphereGeometry(radius, 32, 32);
     const mesh = new THREE.Mesh(geo, material);
+    mesh.raycast = () => null;
     mesh.scale.setScalar(1.25);
     const group = groupRef.current;
     group.add(mesh);
@@ -80,10 +183,9 @@ function Atmosphere({
       material.dispose();
       group.remove(mesh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [radius, color, intensity]);
 
-  return <group ref={groupRef} />;
+  return <group ref={groupRef} raycast={() => null} />;
 }
 
 // Moon
@@ -129,13 +231,77 @@ function Moon({
   });
 
   return (
-    <mesh ref={meshRef} material={material}>
+    <mesh ref={meshRef} material={material} raycast={() => null}>
       <sphereGeometry args={[moon.radius, 16, 16]} />
     </mesh>
   );
 }
 
-// Single planet
+// Mathematically exact Keplerian orbital ellipse points
+function getOrbitPathPoints(config: PlanetConfig, scaleMode: ScaleMode): THREE.Vector3[] {
+  const pts: THREE.Vector3[] = [];
+  const steps = 256;
+  const k = config.keplerian;
+  
+  if (!k || k.a === 0) return pts;
+  
+  const degToRad = Math.PI / 180;
+  const orbitRadiusScale = getOrbitRadius(config, scaleMode);
+  const scaleRatio = orbitRadiusScale / k.a;
+  
+  const e = k.e;
+  const inc = k.i * degToRad;
+  const node = k.node * degToRad;
+  const w = (k.wBar - k.node) * degToRad;
+  
+  for (let i = 0; i <= steps; i++) {
+    const theta = (i / steps) * Math.PI * 2;
+    const r_AU = (k.a * (1 - e * e)) / (1 + e * Math.cos(theta));
+    const u = w + theta;
+    
+    const X_AU = r_AU * (Math.cos(node) * Math.cos(u) - Math.sin(node) * Math.sin(u) * Math.cos(inc));
+    const Z_AU = r_AU * (Math.sin(node) * Math.cos(u) + Math.cos(node) * Math.sin(u) * Math.cos(inc));
+    const Y_AU = r_AU * (Math.sin(u) * Math.sin(inc));
+    
+    pts.push(new THREE.Vector3(X_AU * scaleRatio, Y_AU * scaleRatio, Z_AU * scaleRatio));
+  }
+  return pts;
+}
+
+// Clean, memoized Orbit Line component (raycast disabled)
+function OrbitPath({
+  config,
+  isSelected,
+  hovered,
+  scaleMode,
+}: {
+  config: PlanetConfig;
+  isSelected: boolean;
+  hovered: boolean;
+  scaleMode: ScaleMode;
+}) {
+  const geometry = useMemo(() => {
+    const pts = getOrbitPathPoints(config, scaleMode);
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  }, [config, scaleMode]);
+
+  const color = isSelected ? "#00d4ff" : hovered ? "#60a5fa" : "#3b82f6";
+  const opacity = isSelected ? 0.9 : hovered ? 0.55 : 0.28;
+
+  return (
+    <lineLoop geometry={geometry} raycast={() => null}>
+      <lineBasicMaterial
+        color={color}
+        transparent
+        opacity={opacity}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </lineLoop>
+  );
+}
+
+// Single planet component - smoothly glides between 3D Keplerian Orbit & Straight Line Alignment
 function Planet({
   config,
   onClick,
@@ -145,95 +311,63 @@ function Planet({
 }) {
   const groupRef = useRef<THREE.Group>(null!);
   const meshRef = useRef<THREE.Mesh>(null);
-  const orbitAngleRef = useRef(0);
-  const { updatePlanetPosition, gravityBlendRef } = useGravityEngine();
+  const scaleMode = useSpaceStore((s) => s.scaleMode);
   const showOrbits = useSpaceStore((s) => s.showOrbits);
+  const simDate = useSpaceStore((s) => s.simDate);
+  const selectedObject = useSpaceStore((s) => s.selectedObject);
+  const gravityEnabled = useSpaceStore((s) => s.gravityEnabled);
 
-  const zeroGVelocityRef = useRef(new THREE.Vector3(0, 0, 0));
-  const basePositionRef = useRef(new THREE.Vector3(config.orbitRadius, 0, 0));
+  const isSelected = selectedObject?.id === config.id;
+  const displayRadius = useMemo(() => getDisplayRadius(config, scaleMode), [config, scaleMode]);
+  const currentOrbitRadius = useMemo(() => getOrbitRadius(config, scaleMode), [config, scaleMode]);
 
   const [hovered, setHovered] = useState(false);
+  const gravityBlendRef = useRef(gravityEnabled ? 1 : 0);
 
-  useEffect(() => {
-    orbitAngleRef.current = Math.random() * Math.PI * 2;
-    zeroGVelocityRef.current.set(
-      (Math.random() - 0.5) * 2,
-      (Math.random() - 0.5) * 1,
-      (Math.random() - 0.5) * 2
-    );
-  }, []);
+  // Perfect Straight Line Alignment Position on X-Axis when Gravity is OFF
+  const straightLinePos = useMemo(
+    () => new THREE.Vector3(currentOrbitRadius, 0, 0),
+    [currentOrbitRadius]
+  );
 
   const planetMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
         color: new THREE.Color(config.color),
         emissive: new THREE.Color(config.emissive),
-        emissiveIntensity: 0.3,
+        emissiveIntensity: isSelected ? 0.85 : 0.35,
         roughness: config.roughness,
         metalness: config.metalness,
       }),
-    [config]
+    [config, isSelected]
   );
 
-  const orbitLineMaterial = useMemo(
-    () =>
-      new THREE.LineBasicMaterial({
-        color: 0x334466,
-        transparent: true,
-        opacity: 0.25,
-        depthWrite: false,
-      }),
-    []
-  );
-
-  const orbitLine = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i <= 128; i++) {
-      const a = (i / 128) * Math.PI * 2;
-      pts.push(
-        new THREE.Vector3(
-          Math.cos(a) * config.orbitRadius,
-          Math.sin(a) * config.orbitRadius * Math.sin(config.orbitInclination),
-          Math.sin(a) * config.orbitRadius * Math.cos(config.orbitInclination)
-        )
-      );
-    }
-    return { points: pts };
-  }, [config]);
-
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     try {
       if (!groupRef.current || !meshRef.current) return;
 
-      const speed = config.orbitSpeed * 0.2;
-      const blend = gravityBlendRef.current;
-      
-      const { angle, x, y, z } = updatePlanetPosition(
-        {
-          orbitAngle: orbitAngleRef.current,
-          orbitRadius: config.orbitRadius,
-          orbitInclination: config.orbitInclination,
-        },
-        delta,
-        speed,
-        blend
+      // Smoothly animate gravity blend between 0 (Gravity OFF) and 1 (Gravity ON)
+      const targetBlend = gravityEnabled ? 1 : 0;
+      gravityBlendRef.current = THREE.MathUtils.damp(
+        gravityBlendRef.current,
+        targetBlend,
+        5,
+        delta
       );
-      orbitAngleRef.current = angle;
+      const blend = gravityBlendRef.current;
 
-      const orbitPos = new THREE.Vector3(x, y, z);
+      // 1. Position on 3D Keplerian Orbit ring (Gravity ON)
+      const coords = getKeplerianPosition(config, simDate, currentOrbitRadius);
+      const orbitPos = new THREE.Vector3(coords.x, coords.y, coords.z);
       
-      // Zero-G drift calculation
-      if (blend < 1) {
-        basePositionRef.current.add(
-          zeroGVelocityRef.current.clone().multiplyScalar(delta * 0.1)
-        );
-        // Soft boundary for Zero-G drift
-        if (basePositionRef.current.length() > config.orbitRadius * 2) {
-          zeroGVelocityRef.current.negate();
-        }
-      }
+      // 2. Position on Perfect Straight Horizontal Line (Gravity OFF)
+      const linePos = straightLinePos;
 
-      groupRef.current.position.lerpVectors(basePositionRef.current, orbitPos, blend);
+      // Smoothly lerp between straight horizontal line (blend = 0) and 3D Keplerian Orbit (blend = 1)
+      groupRef.current.position.lerpVectors(linePos, orbitPos, blend);
+      
+      // Zero out axial tilt when gravity is OFF so all planets sit perfectly level along the line
+      groupRef.current.rotation.z = config.tilt * blend;
       meshRef.current.rotation.y += config.rotationSpeed * delta * 0.5;
     } catch (error) {
       console.error("❌ Planet useFrame error:", error, { planet: config.name });
@@ -242,19 +376,17 @@ function Planet({
 
   return (
     <>
-      {/* Visual Orbit Path - Anchored at origin */}
+      {/* Visual Elliptical Orbit Path */}
       {showOrbits && (
-        <primitive
-          object={
-            new THREE.LineLoop(
-              new THREE.BufferGeometry().setFromPoints(orbitLine.points),
-              orbitLineMaterial
-            )
-          }
+        <OrbitPath
+          config={config}
+          isSelected={isSelected}
+          hovered={hovered}
+          scaleMode={scaleMode}
         />
       )}
 
-      <group ref={groupRef}>
+      <group ref={groupRef} name={config.id} userData={{ id: config.id }}>
         <group
           onPointerOver={() => {
             setHovered(true);
@@ -267,30 +399,39 @@ function Planet({
           onClick={() => onClick(config)}
         >
           <mesh ref={meshRef} material={planetMaterial} castShadow receiveShadow>
-            <sphereGeometry args={[config.radius, 64, 64]} />
+            <sphereGeometry args={[displayRadius, 64, 64]} />
             {config.hasRings && (
-              <PlanetRings
-                innerR={config.ringInnerRadius!}
-                outerR={config.ringOuterRadius!}
-                color={config.ringColor!}
-                opacity={config.ringOpacity!}
+              <PlanetRingSystem
+                planetId={config.id}
+                radius={displayRadius}
+                ringColor={config.ringColor}
               />
             )}
           </mesh>
 
-          {/* Dynamic glow intensity on hover */}
+          {/* Dynamic glow intensity on hover or selection */}
           <Atmosphere
-            radius={config.radius}
+            radius={displayRadius}
             color={config.atmosphereColor}
             intensity={
-              hovered
+              isSelected
+                ? config.atmosphereIntensity * 2.2
+                : hovered
                 ? config.atmosphereIntensity * 1.5
                 : config.atmosphereIntensity
             }
           />
         </group>
 
-        {/* Moons - Children of the planet group */}
+        {/* Subtle Glowing Ring & Floating Planet Name */}
+        {isSelected && (
+          <SelectionHighlight
+            radius={displayRadius}
+            name={config.name}
+          />
+        )}
+
+        {/* Moons */}
         {config.moons.map((moon, i) => (
           <Moon key={i} moon={moon} parentRef={groupRef} />
         ))}
@@ -299,21 +440,28 @@ function Planet({
   );
 }
 
-// The Central Star (Sun)
-function CentralStar() {
+// The Central Star (The Sun) - Clean & Non-Blocking
+function CentralStar({ onSelect }: { onSelect: (obj: PlanetConfig) => void }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
+  
+  const scaleMode = useSpaceStore((s) => s.scaleMode);
+  const selectedObject = useSpaceStore((s) => s.selectedObject);
+  const isSelected = selectedObject?.id === SUN_CONFIG.id;
+
+  const sunRadius = useMemo(() => getSunDisplayRadius(scaleMode), [scaleMode]);
 
   const coreMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#ffdd88"),
-        emissive: new THREE.Color("#ffaa44"),
-        emissiveIntensity: 2,
+        color: new THREE.Color(SUN_CONFIG.color),
+        emissive: new THREE.Color(SUN_CONFIG.emissive),
+        emissiveIntensity: isSelected ? 3.5 : hovered ? 2.5 : 2.0,
         roughness: 0,
         metalness: 0,
       }),
-    []
+    [isSelected, hovered]
   );
 
   const glowMaterial = useMemo(
@@ -321,12 +469,12 @@ function CentralStar() {
       new THREE.MeshBasicMaterial({
         color: new THREE.Color("#ffaa22"),
         transparent: true,
-        opacity: 0.08,
+        opacity: hovered || isSelected ? 0.22 : 0.08,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         side: THREE.BackSide,
       }),
-    []
+    [hovered, isSelected]
   );
 
   useFrame(({ clock }) => {
@@ -335,71 +483,111 @@ function CentralStar() {
       const t = clock.getElapsedTime();
       meshRef.current.rotation.y += 0.002;
       const pulse = 1 + Math.sin(t * 0.5) * 0.03;
-      glowRef.current.scale.setScalar(pulse * 3.5);
+      glowRef.current.scale.setScalar(pulse * (hovered || isSelected ? 1.4 : 1.25));
     } catch (error) {
       console.error("❌ CentralStar useFrame error:", error);
     }
   });
 
   return (
-    <group>
+    <group name={SUN_CONFIG.id} userData={{ id: SUN_CONFIG.id }}>
       <pointLight
         color="#ffdd88"
         intensity={800}
-        distance={300}
+        distance={400}
         decay={1.5}
         castShadow
       />
       
-      {/* Adding Solar Flares to the Sun */}
+      {/* Solar Flares prominence effect (raycasting disabled) */}
       <SolarFlares />
 
-      <mesh ref={meshRef} material={coreMaterial}>
-        <sphereGeometry args={[3.5, 64, 64]} />
-      </mesh>
-      <mesh ref={glowRef} material={glowMaterial}>
-        <sphereGeometry args={[3.5, 32, 32]} />
-      </mesh>
-      {[6, 9, 14].map((r, i) => (
-        <mesh key={i} rotation={[Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[r, r + 0.15, 64]} />
-          <meshBasicMaterial
-            color={new THREE.Color("#ff8800")}
-            transparent
-            opacity={0.04 - i * 0.01}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-            side={THREE.DoubleSide}
-          />
+      {/* Core Sun Mesh (The ONLY mesh that receives clicks for the Sun) */}
+      <group
+        onPointerOver={() => {
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "auto";
+        }}
+        onClick={() => onSelect(SUN_CONFIG)}
+      >
+        <mesh ref={meshRef} material={coreMaterial}>
+          <sphereGeometry args={[sunRadius, 64, 64]} />
         </mesh>
-      ))}
-      <pointLight color="#ff6600" intensity={60} distance={20} decay={2} />
+      </group>
+
+      {/* Visual Glow Shell (Raycasting disabled) */}
+      <mesh ref={glowRef} material={glowMaterial} raycast={() => null}>
+        <sphereGeometry args={[sunRadius, 32, 32]} />
+      </mesh>
+
+      {/* Subtle Selection Highlight for Sun */}
+      {isSelected && (
+        <SelectionHighlight
+          radius={sunRadius}
+          name={SUN_CONFIG.name}
+        />
+      )}
+
+      <pointLight color="#ff6600" intensity={80} distance={30} decay={2} />
     </group>
   );
 }
 
 export default function Planets() {
   const setSelectedObject = useSpaceStore((s) => s.setSelectedObject);
+  const simDate = useSpaceStore((s) => s.simDate);
+  const setSimDate = useSpaceStore((s) => s.setSimDate);
+  const isPlaying = useSpaceStore((s) => s.isPlaying);
+  const simSpeed = useSpaceStore((s) => s.simSpeed);
+  const scaleMode = useSpaceStore((s) => s.scaleMode);
 
-  const handleClick = (config: PlanetConfig) => {
-    setSelectedObject({
+  // Time evolution loop driven by R3F frame rate
+  useFrame((_, delta) => {
+    if (isPlaying && simSpeed > 0) {
+      const daysToAdd = delta * simSpeed * 0.5;
+      const newTime = simDate.getTime() + daysToAdd * 86400 * 1000;
+      setSimDate(new Date(newTime));
+    }
+  });
+
+  const handleSelect = (config: PlanetConfig) => {
+    const currentOrbitRadius = getOrbitRadius(config, scaleMode);
+    const currentCoords = getKeplerianPosition(config, simDate, currentOrbitRadius);
+    const distStr = config.id === "sun" ? "0 AU (Center)" : `${currentCoords.distanceAU.toFixed(3)} AU`;
+
+    const selectedPayload: SelectedObject = {
       id: config.id,
       name: config.name,
       type: config.type,
-      distance: config.stats.distanceAU + " AU",
+      tagline: config.tagline,
       description: config.description,
+      distance: distStr,
+      color: config.color,
+      emissive: config.emissive,
+      atmosphereColor: config.atmosphereColor,
       stats: config.stats,
-    });
+      atmosphereGases: config.atmosphereGases,
+      missions: config.missions,
+      trivia: config.trivia,
+      moons: config.moons,
+      config: config,
+    };
+
+    setSelectedObject(selectedPayload);
   };
 
   return (
     <group name="planets">
-      <CentralStar />
+      <CentralStar onSelect={handleSelect} />
       {PLANETS.map((planet) => (
         <Planet
           key={planet.id}
           config={planet}
-          onClick={() => handleClick(planet)}
+          onClick={handleSelect}
         />
       ))}
     </group>

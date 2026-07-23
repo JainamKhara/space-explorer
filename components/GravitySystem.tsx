@@ -4,15 +4,17 @@ import { useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSpaceStore } from "@/store/useSpaceStore";
+import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 export default function GravitySystem() {
-  const { camera } = useThree();
+  const { camera, controls } = useThree();
   const resetView = useSpaceStore((s) => s.resetView);
   const clearResetView = useSpaceStore((s) => s.clearResetView);
+  const selectedObject = useSpaceStore((s) => s.selectedObject);
 
   const isResettingRef = useRef(false);
 
-  // Handle reset view
+  // Handle reset view command
   useEffect(() => {
     if (resetView) {
       isResettingRef.current = true;
@@ -20,22 +22,42 @@ export default function GravitySystem() {
     }
   }, [resetView, clearResetView]);
 
-  useFrame((_, delta) => {
+  useFrame(({ scene }, delta) => {
     try {
-      if (!isResettingRef.current) return;
-
-      const defaultPos = new THREE.Vector3(0, 5, 100);
-      camera.position.lerp(defaultPos, delta * 2);
+      const orbitControls = controls as unknown as OrbitControlsImpl;
       
-      const targetQuat = new THREE.Quaternion();
-      const dummy = new THREE.Object3D();
-      dummy.position.copy(camera.position);
-      dummy.lookAt(0, 0, 0);
-      targetQuat.copy(dummy.quaternion);
-      camera.quaternion.slerp(targetQuat, delta * 2);
+      if (isResettingRef.current) {
+        const defaultPos = new THREE.Vector3(0, 25, 130);
+        camera.position.lerp(defaultPos, delta * 2.5);
+        if (orbitControls) {
+          orbitControls.target.lerp(new THREE.Vector3(0, 0, 0), delta * 2.5);
+          orbitControls.update();
+        }
+        if (camera.position.distanceTo(defaultPos) < 1.0) {
+          isResettingRef.current = false;
+        }
+        return;
+      }
 
-      if (camera.position.distanceTo(defaultPos) < 0.5) {
-        isResettingRef.current = false;
+      // Smooth camera focus to selected planet or Sun target
+      if (selectedObject && selectedObject.id) {
+        let targetMesh: THREE.Object3D | null = null;
+        
+        // Find planet or Sun mesh in scene by name
+        scene.traverse((obj) => {
+          if (obj.name === selectedObject.id || (obj.userData && obj.userData.id === selectedObject.id)) {
+            targetMesh = obj;
+          }
+        });
+
+        if (targetMesh && orbitControls) {
+          const worldPos = new THREE.Vector3();
+          (targetMesh as THREE.Object3D).getWorldPosition(worldPos);
+
+          // Smoothly lerp camera orbit target to planet position
+          orbitControls.target.lerp(worldPos, delta * 3.5);
+          orbitControls.update();
+        }
       }
     } catch (error) {
       console.error("❌ GravitySystem useFrame error:", error);

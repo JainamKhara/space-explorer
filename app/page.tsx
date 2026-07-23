@@ -198,22 +198,12 @@ function EntryScreen({ onComplete }: { onComplete: () => void }) {
               >
                 LAUNCH EXPLORER
               </motion.button>
-              <div className="text-xs text-white/15" style={{ fontFamily: "var(--font-mono)" }}>
-                CLICK TO BEGIN TRANSMISSION
+              <div className="text-xs text-white/30 font-medium">
+                Click to explore
               </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-
-      {/* Corner decorations */}
-      <div className="absolute top-6 left-6 text-xs text-white/15 z-20" style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.1em" }}>
-        SYS://INIT<br />
-        <span className="text-cyan-400/20">v1.0.0</span>
-      </div>
-      <div className="absolute bottom-6 right-6 text-xs text-right text-white/15 z-20" style={{ fontFamily: "var(--font-mono)" }}>
-        DEEP SPACE PROTOCOL<br />
-        <span className="text-cyan-400/20">STANDING BY</span>
       </div>
     </motion.div>
   );
